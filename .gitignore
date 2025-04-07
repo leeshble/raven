@@ -1,0 +1,36 @@
+# Python virtual environment
+venv/
+env/
+.env/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# IDE settings
+.vscode/
+.idea/
+
+# FAISS data files
+faiss_data/*.bin
+faiss_data/*.pkl
+
+# Test data
+test_*.py
+*_test.py
+*.test.py
+
+# Logs
+*.log
+logs/
+
+# Local data
+*.csv
+*.db
+*.sqlite 
