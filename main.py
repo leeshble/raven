@@ -105,7 +105,7 @@ def simple_search(request: QueryRequest):
 def create_faiss_embeddings_endpoint(request: FaissEmbeddingRequest):
     """Faiss를 사용하여 임베딩 생성"""
     success, message, num_points = create_faiss_embeddings(
-        csv_path=request.csv_path,
+        excel_path=request.excel_path,
         model_name=request.model_name,
         device=request.device,
         save_dir=request.save_dir
@@ -225,4 +225,4 @@ def faiss_ask_ollama(request: FaissOllamaRequest):
         return {"answer": f"오류가 발생했습니다: {str(e)}", "sources": [], "raw_contexts": []}
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)

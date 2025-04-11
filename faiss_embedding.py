@@ -3,16 +3,16 @@ from typing import Tuple, Optional
 import os
 
 def create_faiss_embeddings(
-    csv_path: str,
+    excel_path: str,
     model_name: str = "sentence-transformers/static-similarity-mrl-multilingual-v1",
     device: str = "cpu",
     save_dir: str = "faiss_data"
 ) -> Tuple[bool, str, int]:
     """
-    CSV에서 임베딩을 생성하고 Faiss 인덱스로 저장
+    Excel 파일에서 임베딩을 생성하고 Faiss 인덱스로 저장
     
     Args:
-        csv_path: CSV 파일 경로
+        excel_path: Excel 파일 경로
         model_name: 임베딩 모델 이름
         device: 모델 실행 디바이스 (cpu 또는 cuda)
         save_dir: 인덱스와 메타데이터를 저장할 디렉토리
@@ -28,9 +28,9 @@ def create_faiss_embeddings(
         # Faiss 벡터 저장소 초기화
         vector_store = FaissVectorStore()
         
-        # CSV에서 임베딩 생성 및 인덱스에 추가
-        num_points = vector_store.load_embeddings_from_csv(
-            csv_path=csv_path,
+        # Excel 파일에서 임베딩 생성 및 인덱스에 추가
+        num_points = vector_store.load_embeddings_from_excel(
+            excel_path=excel_path,
             model_name=model_name,
             device=device,
             save_path=save_dir

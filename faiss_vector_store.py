@@ -35,16 +35,16 @@ class FaissVectorStore:
         self.index = faiss.IndexFlatIP(vector_size)  # 내적(Inner Product)으로 cosine 유사도 사용
         return self.index
     
-    def load_embeddings_from_csv(self, 
-                                 csv_path: str, 
+    def load_embeddings_from_excel(self, 
+                                 excel_path: str, 
                                  model_name: str = "sentence-transformers/static-similarity-mrl-multilingual-v1", 
                                  device: str = "cpu",
                                  save_path: Optional[str] = None):
         """
-        CSV에서 데이터를 로드하고 임베딩 생성
+        Excel 파일에서 데이터를 로드하고 임베딩 생성
         
         Args:
-            csv_path: CSV 파일 경로
+            excel_path: Excel 파일 경로
             model_name: 임베딩 모델 이름
             device: 모델 실행 디바이스 (cpu 또는 cuda)
             save_path: 생성된 인덱스와 메타데이터 저장 경로 (디렉토리)
@@ -52,72 +52,87 @@ class FaissVectorStore:
         Returns:
             생성된 포인트(임베딩) 개수
         """
-        # CSV 로드 (인코딩 자동 감지)
         try:
-            df = pd.read_csv(csv_path, names=["esti_question", "esti_answer", "esti_rel_link"], encoding='cp949')
-        except UnicodeDecodeError:
-            try:
-                df = pd.read_csv(csv_path, names=["esti_question", "esti_answer", "esti_rel_link"], encoding='euc-kr')
-            except UnicodeDecodeError:
+            # Excel 파일 로드
+            df = pd.read_excel(excel_path)
+            
+            # 필요한 컬럼이 있는지 확인
+            required_columns = ['esti_question', 'esti_answer', 'esti_rel_link']
+            
+            # 컬럼 이름이 다른 경우 이름 변경
+            if len(df.columns) >= 3 and not all(col in df.columns for col in required_columns):
+                # 첫 번째 컬럼을 질문으로, 두 번째 컬럼을 답변으로, 세 번째 컬럼을 링크로 간주
+                df.columns = required_columns[:len(df.columns)]
+            
+            # 컬럼이 3개 미만인 경우 오류 발생
+            if len(df.columns) < 3:
+                raise ValueError(f"Excel 파일에는 최소 3개의 컬럼이 필요합니다. 현재 컬럼 수: {len(df.columns)}")
+            
+            # 데이터프레임에서 필요한 컬럼만 선택
+            df = df[required_columns[:len(df.columns)]]
+            
+            # NaN 값 처리
+            df = df.fillna("")
+            
+            if len(df) == 0:
+                raise ValueError("Excel 파일에서 데이터를 추출할 수 없습니다.")
+            
+            # 임베딩 모델 초기화
+            model = SentenceTransformer(model_name, device=device)
+            
+            # 벡터 크기 확인하고 인덱스 생성
+            if self.index is None:
+                sample_embedding = model.encode(df["esti_question"].iloc[0])
+                vector_size = len(sample_embedding)
+                self.create_index(vector_size=vector_size)
+            
+            # 임베딩 생성 및 인덱스에 추가
+            embeddings = []
+            self.metadata = []
+            
+            for idx, row in df.iterrows():
+                # 질문 임베딩 생성
+                embedding = model.encode(row["esti_question"])
+                embeddings.append(embedding)
+                
+                # JSON 직렬화 가능한 값만 메타데이터에 저장
                 try:
-                    df = pd.read_csv(csv_path, names=["esti_question", "esti_answer", "esti_rel_link"], encoding='utf-8-sig')
-                except UnicodeDecodeError:
-                    df = pd.read_csv(csv_path, names=["esti_question", "esti_answer", "esti_rel_link"], encoding='utf-8')
-        
-        # 임베딩 모델 초기화
-        model = SentenceTransformer(model_name, device=device)
-        
-        # 벡터 크기 확인하고 인덱스 생성
-        if self.index is None:
-            sample_embedding = model.encode(df["esti_question"].iloc[0])
-            vector_size = len(sample_embedding)
-            self.create_index(vector_size=vector_size)
-        
-        # 임베딩 생성 및 인덱스에 추가
-        embeddings = []
-        self.metadata = []  # 메타데이터 초기화
-        
-        for idx, row in df.iterrows():
-            # 질문 임베딩 생성
-            embedding = model.encode(row["esti_question"])
-            embeddings.append(embedding)
+                    # 직렬화 가능한지 테스트
+                    metadata_item = {
+                        "esti_question": str(row["esti_question"]) if pd.notna(row["esti_question"]) else "",
+                        "esti_answer": str(row["esti_answer"]) if pd.notna(row["esti_answer"]) else "",
+                        "esti_rel_link": str(row["esti_rel_link"]) if pd.notna(row["esti_rel_link"]) else ""
+                    }
+                    json.dumps(metadata_item)  # 직렬화 테스트
+                    self.metadata.append(metadata_item)
+                except (TypeError, ValueError, OverflowError):
+                    # 직렬화할 수 없는 경우 기본값 사용
+                    self.metadata.append({
+                        "esti_question": str(row["esti_question"])[:1000] if pd.notna(row["esti_question"]) else "",
+                        "esti_answer": str(row["esti_answer"])[:1000] if pd.notna(row["esti_answer"]) else "",
+                        "esti_rel_link": str(row["esti_rel_link"])[:1000] if pd.notna(row["esti_rel_link"]) else ""
+                    })
             
-            # JSON 직렬화 가능한 값만 메타데이터에 저장
-            try:
-                # 직렬화 가능한지 테스트
-                metadata_item = {
-                    "esti_question": str(row["esti_question"]) if pd.notna(row["esti_question"]) else "",
-                    "esti_answer": str(row["esti_answer"]) if pd.notna(row["esti_answer"]) else "",
-                    "esti_rel_link": str(row["esti_rel_link"]) if pd.notna(row["esti_rel_link"]) else ""
-                }
-                json.dumps(metadata_item)  # 직렬화 테스트
-                self.metadata.append(metadata_item)
-            except (TypeError, ValueError, OverflowError):
-                # 직렬화할 수 없는 경우 기본값 사용
-                self.metadata.append({
-                    "esti_question": str(row["esti_question"])[:1000] if pd.notna(row["esti_question"]) else "",
-                    "esti_answer": str(row["esti_answer"])[:1000] if pd.notna(row["esti_answer"]) else "",
-                    "esti_rel_link": str(row["esti_rel_link"])[:1000] if pd.notna(row["esti_rel_link"]) else ""
-                })
-        
-        # 임베딩 정규화 (cosine 유사도를 위해)
-        embeddings_array = np.array(embeddings).astype('float32')
-        faiss.normalize_L2(embeddings_array)
-        
-        # 인덱스에 임베딩 추가
-        self.index.add(embeddings_array)
-        
-        # 저장 경로가 제공된 경우 인덱스와 메타데이터 저장
-        if save_path:
-            if not os.path.exists(save_path):
-                os.makedirs(save_path)
+            # 임베딩 정규화 (cosine 유사도를 위해)
+            embeddings_array = np.array(embeddings).astype('float32')
+            faiss.normalize_L2(embeddings_array)
             
-            index_path = os.path.join(save_path, "faiss_index.bin")
-            metadata_path = os.path.join(save_path, "metadata.pkl")
+            # 인덱스에 임베딩 추가
+            self.index.add(embeddings_array)
             
-            self.save_index(index_path, metadata_path)
-        
-        return len(embeddings)
+            # 저장 경로가 제공된 경우 인덱스와 메타데이터 저장
+            if save_path:
+                if not os.path.exists(save_path):
+                    os.makedirs(save_path)
+                
+                index_path = os.path.join(save_path, "faiss_index.bin")
+                metadata_path = os.path.join(save_path, "metadata.pkl")
+                
+                self.save_index(index_path, metadata_path)
+            
+            return len(embeddings)
+        except Exception as e:
+            raise ValueError(f"Excel 파일 로드 중 오류가 발생했습니다. 오류: {str(e)}")
     
     def save_index(self, index_path: str, metadata_path: str):
         """인덱스와 메타데이터를 파일로 저장"""

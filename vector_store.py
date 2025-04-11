@@ -66,7 +66,7 @@ class VectorStore:
             
         return len(points)
     
-    def search(self, query_text, limit=3, model_name="sentence-transformers/static-similarity-mrl-multilingual-v1", device="cpu"):
+    def search(self, query_text, limit=1, model_name="sentence-transformers/static-similarity-mrl-multilingual-v1", device="cpu"):
         """Search for similar questions using text query"""
         # 텍스트 쿼리를 임베딩 벡터로 변환
         model = SentenceTransformer(model_name, device=device)
